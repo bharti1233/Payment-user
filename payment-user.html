@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Secure Payment Gateway</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: #f1f5f9;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+    }
+    .container {
+      background: #fff;
+      width: 100%;
+      max-width: 400px;
+      border-radius: 15px;
+      padding: 25px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+      transition: all 0.3s ease;
+    }
+    h2 {
+      text-align: center;
+      color: #1a73e8;
+      margin-bottom: 20px;
+    }
+    input, textarea, button {
+      width: 100%;
+      padding: 12px;
+      margin: 10px 0;
+      border-radius: 8px;
+      border: 1px solid #ccc;
+      font-size: 15px;
+    }
+    textarea {
+      resize: vertical;
+    }
+    button {
+      background: #1a73e8;
+      color: white;
+      font-weight: 600;
+      border: none;
+      cursor: pointer;
+      transition: background 0.3s ease;
+    }
+    button:hover {
+      background: #0f5dd0;
+    }
+    .hidden {
+      display: none;
+    }
+    img.qr {
+      display: block;
+      margin: 0 auto 15px;
+      max-width: 100%;
+      border-radius: 10px;
+      border: 2px solid #1a73e8;
+    }
+    .note {
+      color: #d32f2f;
+      text-align: center;
+      font-weight: 500;
+      font-size: 14px;
+      margin-top: 10px;
+    }
+    .thank-you {
+      text-align: center;
+      color: #388e3c;
+      font-size: 18px;
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+
+<div class="container" id="page1">
+  <h2>💳 Payment Details</h2>
+  <form id="paymentForm">
+    <input type="text" id="name" placeholder="Full Name" required />
+    <input type="email" id="email" placeholder="Email Address" required />
+    <input type="tel" id="phone" placeholder="Phone Number" required />
+    <input type="number" id="amount" placeholder="Amount (INR)" required />
+    <textarea id="purpose" placeholder="Purpose / Tournament Name" required></textarea>
+    <button type="submit">Continue to Payment ➜</button>
+  </form>
+</div>
+
+<div class="container hidden" id="page2">
+  <h2>📤 Confirm UTR</h2>
+  <img src="https://i.supaimg.com/bb3e20b0-0258-408c-937c-1acfc1e226f3.jpg" class="qr" alt="Scan QR Code" />
+  <input type="text" id="utr" placeholder="Enter UTR / Transaction ID" required />
+  <input type="file" id="screenshot" accept="image/*" required />
+  <button onclick="confirmPayment()">✅ Confirm Payment</button>
+  <p class="note">
+    Please enter the correct UTR number, otherwise coins will not be added to your app.<br>Thank you.
+  </p>
+</div>
+
+<div class="container hidden" id="page3">
+  <h2>🎉 Payment Received</h2>
+  <p class="thank-you">
+    Your payment has been successfully confirmed.<br />Coins will be added shortly. Thank you for participating!
+  </p>
+</div>
+
+<script>
+  // Firebase config
+  const firebaseConfig = {
+    apiKey: "AIzaSyAdpAIzWYHFAM5zkgqwIvpU01Gw_ImG0Bs",
+    authDomain: "god-x-lzr.firebaseapp.com",
+    databaseURL: "https://god-x-lzr-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId: "god-x-lzr",
+    storageBucket: "god-x-lzr.appspot.com",
+    messagingSenderId: "366032833262",
+    appId: "1:366032833262:android:9168b1af6e58b1237d01ff"
+  };
+
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.database();
+  let userKey = null;
+
+  const showPage = (idToShow) => {
+    ['page1', 'page2', 'page3'].forEach(id => {
+      document.getElementById(id).classList.add('hidden');
+    });
+    document.getElementById(idToShow).classList.remove('hidden');
+  };
+
+  document.getElementById('paymentForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const name = document.getElementById('name').value.trim();
+    const email = document.getElementById('email').value.trim();
+    const phone = document.getElementById('phone').value.trim();
+    const amount = document.getElementById('amount').value.trim();
+    const purpose = document.getElementById('purpose').value.trim();
+
+    const ref = db.ref('payments').push();
+    await ref.set({
+      name, email, phone, amount, purpose,
+      status: "Pending",
+      timestamp: new Date().toISOString()
+    });
+    userKey = ref.key;
+
+    showPage('page2');
+  });
+
+  async function confirmPayment() {
+    const utr = document.getElementById('utr').value.trim();
+    const fileInput = document.getElementById('screenshot');
+    const file = fileInput.files[0];
+
+    if (!utr || !file) {
+      alert("Please enter UTR and select a screenshot.");
+      return;
+    }
+
+    try {
+      // Convert image to base64
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = async function () {
+        const base64 = reader.result.split(',')[1];
+
+        // Upload to imgbb
+        const imgbbApiKey = '9aa2371132ee66ae5ad4475182402204'; // ← Replace this
+        const formData = new FormData();
+        formData.append('key', imgbbApiKey);
+        formData.append('image', base64);
+
+        const res = await fetch('https://api.imgbb.com/1/upload', {
+          method: 'POST',
+          body: formData
+        });
+
+        const data = await res.json();
+        const imageUrl = data.data.url;
+
+        // Save to Firebase Database
+        await db.ref('payments/' + userKey).update({
+          utr,
+          screenshotURL: imageUrl,
+          status: "Confirmed"
+        });
+
+        showPage('page3');
+      };
+
+      reader.onerror = function (error) {
+        alert("Error reading file: " + error);
+      };
+    } catch (err) {
+      alert("Upload failed: " + err.message);
+    }
+  }
+</script>
+
+</body>
+</html>
